@@ -146,6 +146,65 @@ class BuiltinFunctions:
         return result
 
     @staticmethod
+    def load_url(env: Environment, url: str, alias: str = "url_doc") -> DocumentNode:
+        """从网页加载并转换为 Markdown 文档"""
+        try:
+            from formats import URLHandler, convert_to_markdown
+            
+            # 从 URL 获取内容并转换为 Markdown
+            markdown_content = convert_to_markdown(url)
+            
+            # 解析为 DocumentNode
+            doc = parse_markdown(markdown_content)
+            env.set_doc(alias, doc)
+            
+            print(f"[MDL] 已从 URL 加载内容: {url} (别名: {alias})")
+            print(f"[MDL] 包含 {len(doc.children)} 个元素")
+            return doc
+        except ImportError:
+            print("[MDL] 错误: 需要安装 requests 和 beautifulsoup4")
+            print("[MDL] 执行: pip install requests beautifulsoup4")
+            raise
+        except Exception as e:
+            print(f"[MDL] 错误: 无法加载 URL - {str(e)}")
+            raise
+
+    @staticmethod
+    def extract_links(content) -> list:
+        """从 Markdown 或 HTML 内容中提取所有链接"""
+        import re
+
+        links = []
+        seen = set()
+
+        md_pattern = re.compile(r'\[([^\]]+)\]\(([^)]+)\)')
+        html_pattern = re.compile(r'<a\s+href=(?:"|\')([^"\']+)(?:"|\')[^>]*>([^<]*)</a>', re.IGNORECASE)
+        ref_pattern = re.compile(r'\[([^\]]+)\]:\s*([^\s]+)')
+        bare_pattern = re.compile(r'(https?://[^\s\)\]]+)')
+
+        for text, url in md_pattern.findall(content):
+            if url not in seen:
+                seen.add(url)
+                links.append({"text": text, "url": url, "type": "markdown"})
+
+        for url, text in html_pattern.findall(content):
+            if url not in seen:
+                seen.add(url)
+                links.append({"text": text or url, "url": url, "type": "html"})
+
+        for text, url in ref_pattern.findall(content):
+            if url not in seen:
+                seen.add(url)
+                links.append({"text": text, "url": url, "type": "reference"})
+
+        for url in bare_pattern.findall(content):
+            if url not in seen:
+                seen.add(url)
+                links.append({"text": url, "url": url, "type": "bare"})
+
+        return links
+
+    @staticmethod
     def select_elements(doc: DocumentNode, element_type: str, index=None) -> list:
         """选择器 - 按类型选取元素"""
         type_map = {
@@ -349,6 +408,7 @@ class BuiltinFunctions:
 
 BUILTINS = {
     "load": BuiltinFunctions.load,
+    "load_url": BuiltinFunctions.load_url,
     "save": BuiltinFunctions.save,
     "print": BuiltinFunctions.print_value,
     "len": BuiltinFunctions.length,
@@ -383,6 +443,7 @@ BUILTINS = {
     "is_empty": BuiltinFunctions.is_empty,
     "keys": BuiltinFunctions.keys,
     "values": BuiltinFunctions.values,
+    "extract_links": BuiltinFunctions.extract_links,
     "analyze": BuiltinFunctions.analyze_document,
     "select": BuiltinFunctions.select_elements,
 }

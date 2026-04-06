@@ -9,6 +9,7 @@ MDL (Markdown Operation Language) 是一个专门为 Markdown 文档操作设计
 - 📊 **功能丰富** - 支持 20+ Markdown 元素，25+ 种文件格式转换
 - 🔄 **智能转换** - 支持 HTML、PDF、JSON、LaTeX 等 15+ 种输出格式
 - 🤖 **AI 赋能** - 集成 OpenAI/Anthropic/Ollama LLM 能力
+- 🌐 **网页抓取** - 支持 URL 内容抓取并转换为 Markdown
 - 🧹 **文档优化** - 内置清理、分析、提取、优化等高级功能
 - 📦 **生产就绪** - 9,200 行代码，53/53 测试通过，100% 完成度
 
@@ -90,12 +91,13 @@ MDL (Markdown Operation Language) 是一个专门为 Markdown 文档操作设计
 | XML (.xml) | ✅ | ✅ | 内置 |
 | YAML (.yaml) | ✅ | ✅ | pyyaml |
 | TOML (.toml) | ✅ | ✅ | toml |
+| URL / 网页 | ✅ | ✅ | requests + beautifulsoup4 |
 
 #### 办公文档
 
 | 格式 | 输入 | 输出 | 依赖包 |
 |------|:----:|:----:|--------|
-| PDF (.pdf) | ✅ | ✅ | pandoc + context |
+| PDF (.pdf) | ✅ | ✅ | pypdf / pdfplumber |
 | Word (.docx) | ✅ | - | python-docx |
 | PowerPoint (.pptx) | ✅ | - | python-pptx |
 | Excel (.xlsx) | ✅ | - | openpyxl |
@@ -288,8 +290,8 @@ save doc as "modified.md"
 
 - Python 3.8+
 - 无需额外依赖 (核心功能)
-- 可选依赖: pypdf, python-docx, python-pptx, openpyxl, Pillow, pytesseract, ebooklib, pyyaml, toml, openai, anthropic
-- **PDF 排版**: Pandoc + ConTeXt (推荐用于高质量 PDF 输出)
+- 可选依赖: pypdf, pdfplumber, python-docx, python-pptx, openpyxl, Pillow, pytesseract, ebooklib, pyyaml, toml, requests, beautifulsoup4, openai, anthropic
+- **PDF 排版**: Pandoc + ConTeXt (推荐用于高质量 Markdown 转 PDF 输出)
 
 ### 命令行使用
 
@@ -448,6 +450,8 @@ batch ["*.md", "*.html"] output "converted/" format "markdown"
 | `split(s, sep)` | 分割字符串 | `split("a,b,c", ",")` → `["a","b","c"]` |
 | `join(list, sep)` | 连接字符串 | `join(["a","b"], "-")` → `"a-b"` |
 | `replace(s, old, new)` | 替换字符串 | `replace("hello", "l", "L")` → `"heLLo"` |
+| `load_url(url, alias)` | 从网页加载并转换为 Markdown 文档 | `load_url("https://example.com", "doc")` |
+| `extract_links(content)` | 提取 Markdown/HTML 内容中的所有链接 | `extract_links(doc)` |
 
 ## API 参考
 

@@ -61,7 +61,7 @@ FORMATS: Dict[str, FormatInfo] = {
     "xlsx": FormatInfo(".xlsx", "Excel", False, True, "openpyxl", "spreadsheet"),
     "csv": FormatInfo(".csv", "CSV", True, category="data"),
     "epub": FormatInfo(".epub", "EPUB", False, True, "ebooklib", "ebook"),
-    "mobi": FormatInfo(".mobi", "MOBI", False, True, "mobi", "ebook"),
+    "mobi": FormatInfo(".mobi", "MOBI", False, True, "ebooklib", "ebook"),
     "rst": FormatInfo(".rst", "reStructuredText", True, category="document"),
     "tex": FormatInfo(".tex", "LaTeX", True, category="document"),
     "latex": FormatInfo(".tex", "LaTeX", True, category="document"),
@@ -89,6 +89,21 @@ def get_format_info(extension: str) -> Optional[FormatInfo]:
     return FORMATS.get(ext)
 
 
+def _normalize_import_name(package_name: str) -> str:
+    """将包名映射为可导入的模块名"""
+    aliases = {
+        "python-docx": "docx",
+        "python-pptx": "pptx",
+        "pyyaml": "yaml",
+        "beautifulsoup4": "bs4",
+        "pypdf": "pypdf",
+        "pdfplumber": "pdfplumber",
+        "ebooklib": "ebooklib",
+        "Pillow": "PIL",
+    }
+    return aliases.get(package_name, package_name.replace("-", "_"))
+
+
 def check_format_support(extension: str) -> bool:
     """检查格式是否支持"""
     info = get_format_info(extension)
@@ -96,7 +111,7 @@ def check_format_support(extension: str) -> bool:
         return False
     if info.requires_extra:
         try:
-            __import__(info.package.replace("-", "_"))
+            __import__(_normalize_import_name(info.package))
             info.supported = True
         except ImportError:
             info.supported = False
@@ -167,20 +182,19 @@ class FormatConverter:
     @staticmethod
     def csv_to_markdown(csv_content: str, delimiter: str = ",") -> str:
         """CSV 转 Markdown 表格"""
-        lines = [line.strip() for line in csv_content.strip().split("\n") if line.strip()]
-        if not lines:
+        import csv
+        from io import StringIO
+
+        reader = csv.reader(StringIO(csv_content.strip()), delimiter=delimiter)
+        rows = [row for row in reader if any(cell.strip() for cell in row)]
+        if not rows:
             return ""
-        rows = [line.split(delimiter) for line in lines]
         max_cols = max(len(row) for row in rows)
-        for row in rows:
-            while len(row) < max_cols:
-                row.append("")
-        header = "| " + " | ".join(rows[0]) + " |"
+        normalized_rows = [row + [""] * (max_cols - len(row)) for row in rows]
+        header = "| " + " | ".join(normalized_rows[0]) + " |"
         separator = "| " + " | ".join(["---"] * max_cols) + " |"
-        body_lines = []
-        for row in rows[1:]:
-            body_lines.append("| " + " | ".join(row) + " |")
-        return header + "\n" + separator + "\n" + "\n".join(body_lines)
+        body_lines = ["| " + " | ".join(row) + " |" for row in normalized_rows[1:]]
+        return header + "\n" + separator + ("\n" + "\n".join(body_lines) if body_lines else "")
 
     @staticmethod
     def json_to_markdown(json_content: str) -> str:
@@ -218,7 +232,7 @@ class FormatConverter:
 
 
 class PDFConverter:
-    """PDF 转换器 (需要 pypdf)"""
+    """PDF 转换器 - 支持 pypdf (基础) 和 pdfplumber (增强表格识别)"""
 
     @staticmethod
     def is_available() -> bool:
@@ -230,10 +244,67 @@ class PDFConverter:
             return False
 
     @staticmethod
-    def to_markdown(pdf_path: str) -> str:
-        """PDF 转 Markdown"""
-        if not PDFConverter.is_available():
-            raise ImportError("PDF 支持需要安装 pypdf: pip install pypdf")
+    def is_pdfplumber_available() -> bool:
+        """检查是否有 pdfplumber (优先选项)"""
+        try:
+            import pdfplumber
+            return True
+        except ImportError:
+            return False
+
+    @staticmethod
+    def to_markdown(pdf_path: str, use_pdfplumber: bool = True) -> str:
+        """
+        PDF 转 Markdown
+        
+        Args:
+            pdf_path: PDF 文件路径
+            use_pdfplumber: 是否优先使用 pdfplumber (更好的表格识别)
+                           False 则使用 pypdf (基础)
+        
+        Returns:
+            转换后的 Markdown 文本
+        """
+        # 优先使用 pdfplumber（表格识别更好）
+        if use_pdfplumber and PDFConverter.is_pdfplumber_available():
+            return PDFConverter._to_markdown_pdfplumber(pdf_path)
+        
+        # 回退到 pypdf
+        if PDFConverter.is_available():
+            return PDFConverter._to_markdown_pypdf(pdf_path)
+        
+        raise ImportError("PDF 支持需要安装 pypdf 或 pdfplumber: pip install pypdf pdfplumber")
+
+    @staticmethod
+    def _to_markdown_pdfplumber(pdf_path: str) -> str:
+        """使用 pdfplumber 转换 (更好的表格识别能力)"""
+        import pdfplumber
+        
+        markdown_parts = []
+        
+        with pdfplumber.open(pdf_path) as pdf:
+            for page_idx, page in enumerate(pdf.pages):
+                markdown_parts.append(f"## 第 {page_idx + 1} 页\n")
+                
+                # 1. 提取文本
+                text = page.extract_text()
+                if text:
+                    markdown_parts.append(text)
+                
+                # 2. 提取表格 (pdfplumber 的强项)
+                tables = page.extract_tables()
+                if tables:
+                    for table in tables:
+                        markdown_parts.append("\n")
+                        markdown_parts.append(PDFConverter._table_to_markdown(table))
+                
+                markdown_parts.append("\n---\n")
+        
+        return "\n".join(markdown_parts)
+
+    @staticmethod
+    def _to_markdown_pypdf(pdf_path: str) -> str:
+        """使用 pypdf 转换 (基础文本提取)"""
         import pypdf
         reader = pypdf.PdfReader(pdf_path)
         lines = []
@@ -244,6 +315,33 @@ class PDFConverter:
                 lines.append(text)
                 lines.append("\n")
         return "\n".join(lines)
+
+    @staticmethod
+    def _table_to_markdown(table: list) -> str:
+        """将表格转换为 Markdown"""
+        if not table or not table[0]:
+            return ""
+        
+        # 确定列数
+        max_cols = max(len(row) for row in table) if table else 0
+        if max_cols == 0:
+            return ""
+        
+        # 规范化：填充空行
+        normalized = []
+        for row in table:
+            normalized_row = row + [None] * (max_cols - len(row))
+            normalized.append([str(cell) if cell else "" for cell in normalized_row])
+        
+        # 生成 Markdown
+        header = "| " + " | ".join(normalized[0]) + " |"
+        separator = "| " + " | ".join(["---"] * max_cols) + " |"
+        body = [
+            "| " + " | ".join(row) + " |"
+            for row in normalized[1:]
+        ]
+        
+        return header + "\n" + separator + "\n" + "\n".join(body)
 
 
 class DOCXConverter:
@@ -327,7 +425,7 @@ class PPTXConverter:
 
 
 class XLSXConverter:
-    """Excel 转换器 (需要 openpyxl)"""
+    """Excel 转换器 (需要 openpyxl) - 增强版支持工作表选择和表头检测"""
 
     @staticmethod
     def is_available() -> bool:
@@ -339,26 +437,74 @@ class XLSXConverter:
             return False
 
     @staticmethod
-    def to_markdown(xlsx_path: str, sheet_name: str = None) -> str:
-        """XLSX 转 Markdown"""
+    def get_sheet_names(xlsx_path: str) -> list:
+        """获取所有工作表名称"""
         if not XLSXConverter.is_available():
             raise ImportError("XLSX 支持需要安装 openpyxl: pip install openpyxl")
         from openpyxl import load_workbook
         wb = load_workbook(xlsx_path)
-        lines = []
-        sheets = [wb[sheet_name]] if sheet_name else wb.worksheets
-        for sheet in sheets:
-            lines.append(f"## {sheet.title}\n")
+        return wb.sheetnames
+
+    @staticmethod
+    def to_markdown(xlsx_path: str, sheet_names: list = None, detect_header: bool = True) -> str:
+        """
+        XLSX 转 Markdown - 增强版
+        
+        Args:
+            xlsx_path: Excel 文件路径
+            sheet_names: 要转换的工作表列表，None=所有
+            detect_header: 是否自动检测表头行
+        
+        Returns:
+            转换后的 Markdown 文本
+        """
+        if not XLSXConverter.is_available():
+            raise ImportError("XLSX 支持需要安装 openpyxl: pip install openpyxl")
+        from openpyxl import load_workbook
+        
+        workbook = load_workbook(xlsx_path)
+        
+        # 工作表选择
+        if sheet_names:
+            sheets_to_process = [
+                workbook[name] for name in sheet_names
+                if name in workbook.sheetnames
+            ]
+        else:
+            sheets_to_process = workbook.worksheets
+        
+        markdown_parts = []
+        
+        for sheet in sheets_to_process:
+            markdown_parts.append(f"## {sheet.title}\n")
+            
+            # 自动检测表头行 (启发式：第一个全非空行)
+            header_row_idx = 0
+            if detect_header:
+                for idx in range(min(5, sheet.max_row)):
+                    row = list(sheet.iter_rows(min_row=idx+1, max_row=idx+1, values_only=True))[0]
+                    if all(cell is not None for cell in row):
+                        header_row_idx = idx
+                        break
+            
+            # 生成表格
             first_row = True
-            for row in sheet.iter_rows(values_only=True):
+            for row_idx, row in enumerate(sheet.iter_rows(values_only=True)):
                 cells = [str(cell) if cell is not None else "" for cell in row]
-                if any(cells):
-                    lines.append("| " + " | ".join(cells) + " |")
-                    if first_row:
-                        lines.append("| " + " | ".join(["---"] * len(cells)) + " |")
+                
+                if any(cells):  # 跳过空行
+                    md_row = "| " + " | ".join(cells) + " |"
+                    markdown_parts.append(md_row)
+                    
+                    # 在检测到的表头下添加分隔符
+                    if first_row and row_idx >= header_row_idx:
+                        separator = "| " + " | ".join(["---"] * len(cells)) + " |"
+                        markdown_parts.append(separator)
                         first_row = False
-            lines.append("\n")
-        return "\n".join(lines)
+            
+            markdown_parts.append("\n")
+        
+        return "\n".join(markdown_parts)
 
 
 class EPUBConverter:
@@ -823,8 +969,176 @@ def extract_metadata(file_path: str) -> DocumentMetadata:
     return metadata
 
 
+class URLHandler:
+    """URL 处理器 - 从网页提取内容并转换为 Markdown"""
+
+    @staticmethod
+    def is_available() -> bool:
+        """检查是否可用"""
+        try:
+            import requests
+            from bs4 import BeautifulSoup
+            return True
+        except ImportError:
+            return False
+
+    @staticmethod
+    def fetch_and_convert(url: str, timeout: int = 10) -> str:
+        """
+        获取 URL 内容并转换为 Markdown
+        
+        Args:
+            url: 要抓取的网址
+            timeout: 请求超时时间（秒）
+        
+        Returns:
+            转换后的 Markdown 文本
+        """
+        if not URLHandler.is_available():
+            raise ImportError("URL 支持需要安装: pip install requests beautifulsoup4")
+        
+        try:
+            import requests
+            from bs4 import BeautifulSoup
+            
+            headers = {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+            }
+            
+            response = requests.get(url, timeout=timeout, headers=headers)
+            response.raise_for_status()
+            response.encoding = response.apparent_encoding or 'utf-8'
+            
+            soup = BeautifulSoup(response.text, 'html.parser')
+            
+            # 移除脚本和样式标签
+            for tag in soup(['script', 'style']):
+                tag.decompose()
+            
+            # 提取标题
+            title = soup.find('title')
+            title_text = title.string if title else url
+            
+            # 提取主要内容
+            markdown_parts = [f"# {title_text}\n"]
+            markdown_parts.append(f"**来源**: {url}\n")
+            markdown_parts.append("---\n")
+            
+            # 尝试提取 main 或 article 标签
+            main_content = soup.find('main') or soup.find('article') or soup.find('body')
+            
+            if main_content:
+                URLHandler._extract_content(main_content, markdown_parts)
+            else:
+                body_text = soup.get_text(separator="\n").strip()
+                body_text = re.sub(r"\n{2,}", "\n\n", body_text)
+                markdown_parts.append(body_text)
+            
+            return "\n".join(markdown_parts)
+        
+        except Exception as e:
+            return f"# 网页抓取失败\n\n**URL**: {url}\n\n**错误**: {str(e)}"
+
+    @staticmethod
+    def _extract_content(element, markdown_parts, depth: int = 0):
+        """递归提取内容"""
+        for child in element.children:
+            if isinstance(child, str):
+                text = child.strip()
+                if text and len(text) > 1:  # 忽略单个字符
+                    markdown_parts.append(text)
+            else:
+                tag_name = child.name
+                
+                if tag_name in ('h1', 'h2', 'h3', 'h4', 'h5', 'h6'):
+                    level = int(tag_name[1])
+                    text = child.get_text().strip()
+                    if text:
+                        markdown_parts.append(f"\n{'#' * level} {text}\n")
+                
+                elif tag_name == 'p':
+                    text = child.get_text().strip()
+                    if text:
+                        markdown_parts.append(text)
+                        markdown_parts.append("")
+                
+                elif tag_name in ('ul', 'ol'):
+                    list_items = child.find_all('li', recursive=False)
+                    for item in list_items:
+                        text = item.get_text().strip()
+                        if text:
+                            prefix = "- " if tag_name == 'ul' else "1. "
+                            markdown_parts.append(f"{prefix}{text}")
+                    markdown_parts.append("")
+                
+                elif tag_name == 'table':
+                    URLHandler._extract_table(child, markdown_parts)
+                
+                elif tag_name == 'a':
+                    text = child.get_text().strip()
+                    href = child.get('href', '')
+                    if text and href:
+                        markdown_parts.append(f"[{text}]({href})")
+                
+                elif tag_name == 'img':
+                    src = child.get('src', '')
+                    alt = child.get('alt', '').strip() or os.path.basename(src)
+                    if src:
+                        markdown_parts.append(f"![{alt}]({src})")
+                
+                elif tag_name in ('strong', 'b'):
+                    text = child.get_text().strip()
+                    if text:
+                        markdown_parts.append(f"**{text}**")
+                
+                elif tag_name in ('em', 'i'):
+                    text = child.get_text().strip()
+                    if text:
+                        markdown_parts.append(f"*{text}*")
+                
+                elif tag_name == 'code':
+                    text = child.get_text()
+                    markdown_parts.append(f"`{text}`")
+                
+                elif tag_name == 'pre':
+                    text = child.get_text()
+                    markdown_parts.append(f"```\n{text}\n```")
+                
+                elif tag_name not in ('script', 'style', 'nav', 'footer'):
+                    URLHandler._extract_content(child, markdown_parts, depth + 1)
+
+    @staticmethod
+    def _extract_table(table_element, markdown_parts):
+        """提取表格"""
+        rows = table_element.find_all('tr')
+        if not rows:
+            return
+        
+        # 提取表头
+        header_row = rows[0].find_all(['th', 'td'])
+        headers = [cell.get_text().strip() for cell in header_row]
+        
+        if headers:
+            markdown_parts.append("| " + " | ".join(headers) + " |")
+            markdown_parts.append("| " + " | ".join(["---"] * len(headers)) + " |")
+        
+        # 提取数据行
+        for row in rows[1:]:
+            cells = row.find_all('td')
+            data = [cell.get_text().strip() for cell in cells]
+            if data:
+                markdown_parts.append("| " + " | ".join(data) + " |")
+        
+        markdown_parts.append("")
+
+
 def convert_to_markdown(file_path: str, **kwargs) -> str:
-    """将任意支持的格式转换为 Markdown"""
+    """将任意支持的格式转换为 Markdown (支持文件路径和 URL)"""
+    # 处理 URL
+    if file_path.startswith(('http://', 'https://', 'ftp://')):
+        timeout = kwargs.get('timeout', 10)
+        return URLHandler.fetch_and_convert(file_path, timeout=timeout)
+    
     ext = os.path.splitext(file_path)[1].lower().lstrip(".")
     if ext in ("md", "markdown"):
         with open(file_path, "r", encoding="utf-8") as f:
@@ -877,7 +1191,8 @@ def convert_to_markdown(file_path: str, **kwargs) -> str:
     elif ext == "pptx":
         return PPTXConverter.to_markdown(file_path)
     elif ext == "xlsx":
-        return XLSXConverter.to_markdown(file_path, kwargs.get("sheet_name"))
+        sheet_names = kwargs.get("sheet_names", kwargs.get("sheet_name"))
+        return XLSXConverter.to_markdown(file_path, sheet_names)
     elif ext == "epub":
         return EPUBConverter.to_markdown(file_path)
     elif ext == "mobi":
