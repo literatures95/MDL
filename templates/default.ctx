@@ -1,0 +1,62 @@
+\starttext
+\setupbodyfont[11pt]
+\setupwhitespace[medium]
+\setupindenting[yes,medium]
+
+% 标题样式
+\setuphead[title][
+    style=\bfc,
+    before={\blank[big]},
+    after={\blank[medium]},
+]
+
+\setuphead[subject][
+    style=\bfb,
+    before={\blank[medium]},
+    after={\blank[small]},
+]
+
+\setuphead[subsubject][
+    style=\bfa,
+    before={\blank[small]},
+    after={\blank[small]},
+]
+
+% 段落样式
+\setupparagraphs[yes][each][distance=0.5em]
+
+% 列表样式
+\setupitemgroup[itemize][1][distance=0.5em]
+\setupitemgroup[enumerate][1][distance=0.5em]
+
+% 代码块样式
+\setuptyping[option=TEX]
+\definetyping[code][
+    option=TEX,
+    before={\blank[medium]},
+    after={\blank[medium]},
+    background=color,
+    backgroundcolor=gray,
+    frame=off,
+    style=\tt,
+]
+
+% 表格样式
+\setupTABLE[frame=off]
+\setupTABLE[row][first][background=color,backgroundcolor=gray]
+\setupTABLE[column][1][width=0.3\textwidth]
+\setupTABLE[column][2][width=0.7\textwidth]
+
+% 链接样式
+\setupinteraction[state=start,color=blue]
+
+% 页眉页脚
+\setupheadertexts[]
+\setupfootertexts[]
+
+% 目录
+\setupcombinedlist[content][list={title,subject,subsubject}]
+
+$body$
+
+\stoptext

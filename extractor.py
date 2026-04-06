@@ -1,7 +1,6 @@
 """MDL 结构化提取模块 - 从文档中提取结构化数据"""
 
 import re
-import json
 from typing import Dict, List, Any, Optional, Callable
 from dataclasses import dataclass, field
 

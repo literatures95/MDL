@@ -54,6 +54,12 @@ class HTMLConverter:
         .markdown-body img { max-width: 100%; box-sizing: content-box; }
         .markdown-body task-list-item { list-style-type: none; margin-left: -1.5em; }
         .markdown-body input[type=checkbox] { margin-right: 0.5em; }
+        .markdown-body .critic-add { background-color: #d4edda; color: #155724; padding: 2px 4px; border-radius: 3px; text-decoration: none; }
+        .markdown-body .critic-del { background-color: #f8d7da; color: #721c24; padding: 2px 4px; border-radius: 3px; text-decoration: line-through; }
+        .markdown-body .critic-comment { cursor: help; color: #ffc107; font-weight: bold; }
+        .markdown-body .critic-highlight { background-color: #fff3cd; color: #856404; padding: 2px 4px; border-radius: 3px; }
+        .markdown-body .mermaid { border: 1px solid #ddd; border-radius: 4px; padding: 10px; margin: 10px 0; background-color: #f9f9f9; }
+        .markdown-body .plantuml { border: 1px solid #ddd; border-radius: 4px; padding: 10px; margin: 10px 0; background-color: #f9f9f9; }
         """
 
     def _convert_node(self, node) -> str:
@@ -89,6 +95,13 @@ class HTMLConverter:
             NodeType.DEFINITION_ITEM: self._to_html_definition_item,
             NodeType.MATH_INLINE: self._to_html_math_inline,
             NodeType.MATH_BLOCK: self._to_html_math_block,
+            NodeType.MERMAID_DIAGRAM: self._to_html_mermaid_diagram,
+            NodeType.PLANTUML_DIAGRAM: self._to_html_plantuml_diagram,
+            NodeType.CRITIC_ADDITION: self._to_html_critic_addition,
+            NodeType.CRITIC_DELETION: self._to_html_critic_deletion,
+            NodeType.CRITIC_SUBSTITUTION: self._to_html_critic_substitution,
+            NodeType.CRITIC_COMMENT: self._to_html_critic_comment,
+            NodeType.CRITIC_HIGHLIGHT: self._to_html_critic_highlight,
         }
         func = dispatch.get(node.node_type)
         return func(node) if func else ""
@@ -221,6 +234,41 @@ class HTMLConverter:
             else:
                 parts.append(self._convert_node(node))
         return "".join(parts)
+
+    def _to_html_mermaid_diagram(self, node) -> str:
+        """转换为 Mermaid 图表 HTML"""
+        title_attr = f' title="{html_module.escape(node.title)}"' if node.title else ""
+        return f'<div class="mermaid"{title_attr}>{html_module.escape(node.code)}</div>'
+
+    def _to_html_plantuml_diagram(self, node) -> str:
+        """转换为 PlantUML 图表 HTML"""
+        title_attr = f' title="{html_module.escape(node.title)}"' if node.title else ""
+        return f'<div class="plantuml"{title_attr}>{html_module.escape(node.code)}</div>'
+
+    def _to_html_critic_addition(self, node) -> str:
+        """转换为 CriticMarkup 添加 HTML"""
+        content = self._inline_to_html(node.content)
+        return f'<ins class="critic-add">{content}</ins>'
+
+    def _to_html_critic_deletion(self, node) -> str:
+        """转换为 CriticMarkup 删除 HTML"""
+        content = self._inline_to_html(node.content)
+        return f'<del class="critic-del">{content}</del>'
+
+    def _to_html_critic_substitution(self, node) -> str:
+        """转换为 CriticMarkup 替换 HTML"""
+        remove_content = self._inline_to_html(node.remove_content)
+        add_content = self._inline_to_html(node.add_content)
+        return f'<del class="critic-del">{remove_content}</del><ins class="critic-add">{add_content}</ins>'
+
+    def _to_html_critic_comment(self, node) -> str:
+        """转换为 CriticMarkup 评论 HTML"""
+        return f'<span class="critic-comment" title="{html_module.escape(node.comment)}">💬</span>'
+
+    def _to_html_critic_highlight(self, node) -> str:
+        """转换为 CriticMarkup 高亮 HTML"""
+        content = self._inline_to_html(node.content)
+        return f'<mark class="critic-highlight" title="{html_module.escape(node.comment)}">{content}</mark>'
 
 
 class TextConverter:

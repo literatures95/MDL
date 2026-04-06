@@ -42,6 +42,13 @@ class NodeType(Enum):
     DEFINITION_ITEM = auto()
     MATH_INLINE = auto()
     MATH_BLOCK = auto()
+    MERMAID_DIAGRAM = auto()
+    PLANTUML_DIAGRAM = auto()
+    CRITIC_ADDITION = auto()
+    CRITIC_DELETION = auto()
+    CRITIC_SUBSTITUTION = auto()
+    CRITIC_COMMENT = auto()
+    CRITIC_HIGHLIGHT = auto()
 
     MDL_PROGRAM = auto()
     MDL_LOAD = auto()
@@ -423,6 +430,73 @@ class MathBlockNode(ASTNode):
 
     def __post_init__(self):
         self.node_type = NodeType.MATH_BLOCK
+
+
+@dataclass
+class MermaidDiagramNode(ASTNode):
+    """Mermaid 图表节点"""
+    code: str = ""
+    title: str = ""
+
+    def __post_init__(self):
+        self.node_type = NodeType.MERMAID_DIAGRAM
+
+
+@dataclass
+class PlantUMLDiagramNode(ASTNode):
+    """PlantUML 图表节点"""
+    code: str = ""
+    title: str = ""
+
+    def __post_init__(self):
+        self.node_type = NodeType.PLANTUML_DIAGRAM
+
+
+@dataclass
+class CriticAdditionNode(ASTNode):
+    """CriticMarkup 添加节点 {++ ++}"""
+    content: list = field(default_factory=list)
+
+    def __post_init__(self):
+        self.node_type = NodeType.CRITIC_ADDITION
+
+
+@dataclass
+class CriticDeletionNode(ASTNode):
+    """CriticMarkup 删除节点 {-- --}"""
+    content: list = field(default_factory=list)
+
+    def __post_init__(self):
+        self.node_type = NodeType.CRITIC_DELETION
+
+
+@dataclass
+class CriticSubstitutionNode(ASTNode):
+    """CriticMarkup 替换节点 {~~ ~> ~~}"""
+    remove_content: list = field(default_factory=list)
+    add_content: list = field(default_factory=list)
+
+    def __post_init__(self):
+        self.node_type = NodeType.CRITIC_SUBSTITUTION
+
+
+@dataclass
+class CriticCommentNode(ASTNode):
+    """CriticMarkup 评论节点 {>> <<}"""
+    comment: str = ""
+
+    def __post_init__(self):
+        self.node_type = NodeType.CRITIC_COMMENT
+
+
+@dataclass
+class CriticHighlightNode(ASTNode):
+    """CriticMarkup 高亮节点 {== ==}{>> <<}"""
+    content: list = field(default_factory=list)
+    comment: str = ""
+
+    def __post_init__(self):
+        self.node_type = NodeType.CRITIC_HIGHLIGHT
 
 
 @dataclass

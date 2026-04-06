@@ -1,0 +1,80 @@
+\starttext
+\setupbodyfont[10pt]
+\setupwhitespace[small]
+\setupindenting[yes,small]
+
+% 专业文档样式
+\setuphead[title][
+    style=\bfc,
+    before={\blank[big]},
+    after={\blank[medium]},
+    number=no,
+]
+
+\setuphead[subject][
+    style=\bfb,
+    before={\blank[medium]},
+    after={\blank[small]},
+    number=yes,
+]
+
+\setuphead[subsubject][
+    style=\bfa,
+    before={\blank[small]},
+    after={\blank[small]},
+    number=yes,
+]
+
+\setuphead[subsubsubject][
+    style=\bf,
+    before={\blank[small]},
+    after={\blank[small]},
+    number=yes,
+]
+
+% 代码样式
+\definetyping[code][
+    option=TEX,
+    before={\blank[small]},
+    after={\blank[small]},
+    background=color,
+    backgroundcolor=gray,
+    frame=on,
+    style=\tt,
+    fontsize=small,
+]
+
+% 内联代码
+\definetype[inlinecode][option=TEX]
+
+% 数学公式
+\usemodule[math]
+\setupmath[style=\rm]
+
+% 表格样式
+\setupTABLE[frame=on,rulethickness=0.5pt]
+\setupTABLE[row][first][background=color,backgroundcolor=lightgray,topframe=on]
+\setupTABLE[column][1][width=0.25\textwidth]
+\setupTABLE[column][2][width=0.75\textwidth]
+
+% 引用块
+\setupdelimitedtext[blockquote][
+    before={\blank[medium]},
+    after={\blank[medium]},
+    leftmargin=2em,
+    rightmargin=2em,
+]
+
+% 页眉页脚
+\setupheadertexts[{\getmarking[subject]}][{\pagenumber}]
+\setupfootertexts[][]
+
+% 目录
+\setupcombinedlist[content][
+    list={title,subject,subsubject,subsubsubject},
+    alternative=c,
+]
+
+$body$
+
+\stoptext

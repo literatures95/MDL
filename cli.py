@@ -30,7 +30,11 @@ def create_parser() -> argparse.ArgumentParser:
     convert_parser = subparsers.add_parser("convert", help="转换文档格式")
     convert_parser.add_argument("input", help="输入文件路径")
     convert_parser.add_argument("output", help="输出文件路径")
-    convert_parser.add_argument("--format", "-f", default="md", choices=["md", "html", "json", "txt"], help="输出格式")
+    convert_parser.add_argument("--format", "-f", default="md", choices=["md", "html", "json", "txt", "pdf"], help="输出格式")
+    convert_parser.add_argument("--template", "-t", help="PDF 模板文件 (ConTeXt)")
+    convert_parser.add_argument("--paper-size", default="a4", choices=["a4", "letter", "a5", "b5"], help="纸张大小")
+    convert_parser.add_argument("--font-size", type=int, default=11, help="字体大小 (pt)")
+    convert_parser.add_argument("--margins", default="2.5cm", help="页边距")
     convert_parser.add_argument("--clean", "-c", action="store_true", help="清理文档")
     convert_parser.add_argument("--llm", action="store_true", help="使用 LLM 增强")
 
@@ -118,6 +122,10 @@ def cmd_convert(args):
         elif output_format == "json":
             doc = parse_markdown(md)
             content = json.dumps(doc.to_dict(), ensure_ascii=False, indent=2)
+        elif output_format == "pdf":
+            print("[MDL] 生成 PDF...")
+            cmd_pdf_convert(md, args.output, getattr(args, 'template', None), getattr(args, 'paper_size', 'a4'), getattr(args, 'font_size', 11), getattr(args, 'margins', '2.5cm'))
+            return  # PDF 生成函数会处理文件写入
         else:
             content = md
 
@@ -341,6 +349,76 @@ def cmd_info(args):
             print(f"  {status} .{ext}: {info.name}{extra}")
 
     print()
+
+
+def cmd_pdf_convert(md_content: str, output_path: str, template: str = None,
+                   paper_size: str = "a4", font_size: int = 11, margins: str = "2.5cm"):
+    """使用 Pandoc 和 ConTeXt 生成 PDF"""
+    import tempfile
+    import subprocess
+    import shutil
+
+    try:
+        # 检查 Pandoc 是否可用
+        if not shutil.which("pandoc"):
+            raise Exception("需要安装 Pandoc: https://pandoc.org/installing.html")
+
+        # 检查 ConTeXt 是否可用
+        if not shutil.which("context"):
+            raise Exception("需要安装 ConTeXt: https://wiki.contextgarden.net/Installation")
+
+        # 创建临时 Markdown 文件
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.md', delete=False, encoding='utf-8') as f:
+            f.write(md_content)
+            temp_md = f.name
+
+        try:
+            # 构建 Pandoc 命令
+            cmd = [
+                "pandoc",
+                temp_md,
+                "-f", "markdown",
+                "-t", "context",
+                "-o", output_path,
+                "--pdf-engine=context",
+                f"--variable=fontsize={font_size}pt",
+                f"--variable=papersize={paper_size}",
+                f"--variable=margin={margins}",
+            ]
+
+            # 如果指定了模板，添加模板选项
+            if template and os.path.exists(template):
+                cmd.extend(["--template", template])
+
+            # 添加一些默认的 ConTeXt 选项用于更好的排版
+            cmd.extend([
+                "--variable=linkcolor=blue",
+                "--variable=urlcolor=blue",
+                "--variable=toccolor=black",
+                "--variable=geometry=margin=2.5cm",
+            ])
+
+            print(f"[MDL] 执行命令: {' '.join(cmd)}")
+
+            # 运行 Pandoc
+            result = subprocess.run(cmd, capture_output=True, text=True, encoding='utf-8')
+
+            if result.returncode != 0:
+                print(f"[MDL] Pandoc 错误输出: {result.stderr}")
+                raise Exception(f"Pandoc 转换失败: {result.stderr}")
+
+            print(f"[MDL] PDF 已生成: {output_path}")
+
+        finally:
+            # 清理临时文件
+            try:
+                os.unlink(temp_md)
+            except:
+                pass
+
+    except Exception as e:
+        print(f"[MDL] PDF 生成失败: {e}")
+        sys.exit(1)
 
 
 def main():

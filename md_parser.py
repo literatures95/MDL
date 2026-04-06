@@ -70,6 +70,10 @@ class MarkdownParser:
             return self._parse_setext_heading()
         if self._is_math_block(stripped):
             return self._parse_math_block()
+        if self._is_mermaid_diagram(stripped):
+            return self._parse_mermaid_diagram()
+        if self._is_plantuml_diagram(stripped):
+            return self._parse_plantuml_diagram()
         if self._is_footnote_def(stripped):
             return self._parse_footnote_def()
         if self._is_definition_list(stripped):
@@ -461,8 +465,9 @@ class MarkdownParser:
     def _parse_paragraph(self) -> ParagraphNode:
         """解析段落"""
         lines = []
+        start_pos = self.pos
         while not self._at_end():
-            line = self._current_line().rstrip()
+            line = self._current_line()
             stripped = line.strip()
             if not stripped:
                 break
@@ -478,11 +483,18 @@ class MarkdownParser:
                 break
             if self._is_list_item(stripped) and not lines:
                 break
-            lines.append(stripped)
+            lines.append(line.rstrip('\n'))  # 保留行尾空格，但去掉换行符
             self.pos += 1
-        raw_text = " ".join(lines)
+
+        # 将行连接为文本，保留硬换行信息
+        if lines:
+            # 在行之间添加换行符，但保留行尾空格用于硬换行检测
+            raw_text = '\n'.join(lines)
+        else:
+            raw_text = ""
+
         content = self._parse_inline(raw_text)
-        return ParagraphNode(content=content, raw_text=raw_text, line=self.pos - len(lines))
+        return ParagraphNode(content=content, raw_text=raw_text.replace('\n', ' '), line=start_pos)
 
     def _parse_inline(self, text: str) -> list:
         """解析行内元素"""
@@ -565,6 +577,12 @@ class MarkdownParser:
                 nodes.append(LinkNode(text=auto_link_match.group(1), url=auto_link_match.group(1)))
                 pos += auto_link_match.end()
                 continue
+            email_auto_link_match = re.match(r"<([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})>", remaining)
+            if email_auto_link_match:
+                email = email_auto_link_match.group(1)
+                nodes.append(LinkNode(text=email, url=f"mailto:{email}"))
+                pos += email_auto_link_match.end()
+                continue
             html_inline_match = re.match(r"<(/?\w+[^>]*)>", remaining)
             if html_inline_match:
                 nodes.append(HTMLInlineNode(html=html_inline_match.group(0)))
@@ -575,10 +593,45 @@ class MarkdownParser:
                 nodes.append(LineBreakNode())
                 pos += hard_break_match.end()
                 continue
-            escape_match = re.match(r"\\([\\`*_{}[]()#+\-.!|~^$])", remaining)
+            escape_match = re.match(r"\\([\\`*_{}\[\]()#+\-.!])", remaining)
             if escape_match:
                 nodes.append(TextNode(value=escape_match.group(1)))
                 pos += escape_match.end()
+                continue
+            # CriticMarkup 解析 - 按优先级顺序
+            critic_highlight_match = re.match(r"\{==([^=]+)==\}\{>>([^<]+)<<\}", remaining)
+            if critic_highlight_match:
+                content = self._parse_inline(critic_highlight_match.group(1))
+                comment = critic_highlight_match.group(2).strip()
+                nodes.append(CriticHighlightNode(content=content, comment=comment))
+                pos += critic_highlight_match.end()
+                continue
+            critic_substitution_match = re.match(r"\{~~([^~]+)~>([^~]+)~~\}", remaining)
+            if critic_substitution_match:
+                remove_text = critic_substitution_match.group(1)
+                add_text = critic_substitution_match.group(2)
+                remove_content = self._parse_inline(remove_text)
+                add_content = self._parse_inline(add_text)
+                nodes.append(CriticSubstitutionNode(remove_content=remove_content, add_content=add_content))
+                pos += critic_substitution_match.end()
+                continue
+            critic_addition_match = re.match(r"\{(\+\+)([^\+]*?)\+\+(\+)*\}", remaining)
+            if critic_addition_match:
+                content = self._parse_inline(critic_addition_match.group(2))
+                nodes.append(CriticAdditionNode(content=content))
+                pos += critic_addition_match.end()
+                continue
+            critic_deletion_match = re.match(r"\{(\-\-)([^\-]*?)\-\-(\-)*\}", remaining)
+            if critic_deletion_match:
+                content = self._parse_inline(critic_deletion_match.group(2))
+                nodes.append(CriticDeletionNode(content=content))
+                pos += critic_deletion_match.end()
+                continue
+            critic_comment_match = re.match(r"\{>>([^<]+)<<\}", remaining)
+            if critic_comment_match:
+                comment = critic_comment_match.group(1).strip()
+                nodes.append(CriticCommentNode(comment=comment))
+                pos += critic_comment_match.end()
                 continue
             nodes.append(TextNode(value=text[pos]))
             pos += 1
@@ -606,6 +659,50 @@ class MarkdownParser:
                 info["preview"] = child.raw_text[:80] + ("..." if len(child.raw_text) > 80 else "")
             structure.append(info)
         return structure
+
+    def _is_mermaid_diagram(self, line: str) -> bool:
+        """判断是否为 Mermaid 图表"""
+        stripped = line.strip()
+        return stripped.startswith("```mermaid") or stripped.startswith("```Mermaid")
+
+    def _is_plantuml_diagram(self, line: str) -> bool:
+        """判断是否为 PlantUML 图表"""
+        stripped = line.strip()
+        return stripped.startswith("```plantuml") or stripped.startswith("```PlantUML") or stripped.startswith("```puml")
+
+    def _parse_mermaid_diagram(self) -> MermaidDiagramNode:
+        """解析 Mermaid 图表"""
+        start_line = self._current_line()
+        fence_match = re.match(r"^```(mermaid|Mermaid)\s*(.*)$", start_line)
+        title = fence_match.group(2).strip() if fence_match.group(2) else ""
+        code_lines = []
+        self.pos += 1
+        while not self._at_end():
+            line = self._current_line()
+            if line.strip().startswith("```"):
+                self.pos += 1
+                break
+            code_lines.append(line)
+            self.pos += 1
+        code = "\n".join(code_lines).strip()
+        return MermaidDiagramNode(code=code, title=title, line=self.pos - len(code_lines) - 1)
+
+    def _parse_plantuml_diagram(self) -> PlantUMLDiagramNode:
+        """解析 PlantUML 图表"""
+        start_line = self._current_line()
+        fence_match = re.match(r"^```(plantuml|PlantUML|puml)\s*(.*)$", start_line)
+        title = fence_match.group(2).strip() if fence_match.group(2) else ""
+        code_lines = []
+        self.pos += 1
+        while not self._at_end():
+            line = self._current_line()
+            if line.strip().startswith("```"):
+                self.pos += 1
+                break
+            code_lines.append(line)
+            self.pos += 1
+        code = "\n".join(code_lines).strip()
+        return PlantUMLDiagramNode(code=code, title=title, line=self.pos - len(code_lines) - 1)
 
 
 def parse_markdown(source: str) -> DocumentNode:
@@ -671,3 +768,47 @@ def _extract_links_images(node, result: dict):
         if isinstance(content, list):
             for child in content:
                 _extract_links_images(child, result)
+
+    def _is_mermaid_diagram(self, line: str) -> bool:
+        """判断是否为 Mermaid 图表"""
+        stripped = line.strip()
+        return stripped.startswith("```mermaid") or stripped.startswith("```Mermaid")
+
+    def _is_plantuml_diagram(self, line: str) -> bool:
+        """判断是否为 PlantUML 图表"""
+        stripped = line.strip()
+        return stripped.startswith("```plantuml") or stripped.startswith("```PlantUML") or stripped.startswith("```puml")
+
+    def _parse_mermaid_diagram(self) -> MermaidDiagramNode:
+        """解析 Mermaid 图表"""
+        start_line = self._current_line()
+        fence_match = re.match(r"^```(mermaid|Mermaid)\s*(.*)$", start_line)
+        title = fence_match.group(2).strip() if fence_match.group(2) else ""
+        code_lines = []
+        self.pos += 1
+        while not self._at_end():
+            line = self._current_line()
+            if line.strip().startswith("```"):
+                self.pos += 1
+                break
+            code_lines.append(line)
+            self.pos += 1
+        code = "\n".join(code_lines).strip()
+        return MermaidDiagramNode(code=code, title=title, line=self.pos - len(code_lines) - 1)
+
+    def _parse_plantuml_diagram(self) -> PlantUMLDiagramNode:
+        """解析 PlantUML 图表"""
+        start_line = self._current_line()
+        fence_match = re.match(r"^```(plantuml|PlantUML|puml)\s*(.*)$", start_line)
+        title = fence_match.group(2).strip() if fence_match.group(2) else ""
+        code_lines = []
+        self.pos += 1
+        while not self._at_end():
+            line = self._current_line()
+            if line.strip().startswith("```"):
+                self.pos += 1
+                break
+            code_lines.append(line)
+            self.pos += 1
+        code = "\n".join(code_lines).strip()
+        return PlantUMLDiagramNode(code=code, title=title, line=self.pos - len(code_lines) - 1)
