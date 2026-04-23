@@ -1,7 +1,15 @@
 """MDL 语法解析器 - 将 Token 流转换为 AST 树"""
 
-from lexer import Lexer, Token, TokenType, tokenize
-from ast_nodes import *
+from lexer import Token, TokenType, tokenize
+from typing import Optional
+from ast_nodes import (
+    MDLAppendNode, MDLAssignNode, MDLBatchNode, MDLBinaryOpNode, MDLBooleanNode,
+    MDLCleanNode, MDLComparisonNode, MDLConvertNode, MDLExtractNode, MDLForNode,
+    MDLFuncCallNode, MDLFuncDefNode, MDLIdentifierNode, MDLIfNode, MDLIndexNode,
+    MDLInsertNode, MDLLoadNode, MDLNumberNode, MDLPrintNode, MDLProgramNode,
+    MDLPropertyNode, MDLRemoveNode, MDLSaveNode, MDLSelectorNode, MDLSetNode,
+    MDLStringNode, MDLTransformNode, MDLUnaryOpNode,
+)
 
 
 class ParseError(Exception):
@@ -350,7 +358,6 @@ class Parser:
         """尝试解析内联列表"""
         items = []
         marker = self._current().value
-        depth = 0
         while self._check(TokenType.MINUS, TokenType.STAR, TokenType.NUMBER):
             tok = self._current()
             if tok.type == TokenType.MINUS or tok.type == TokenType.STAR:

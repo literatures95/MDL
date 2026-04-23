@@ -1,7 +1,18 @@
 """MDL Markdown 解析引擎 - 完美解析所有 Markdown 元素为 AST"""
 
 import re
-from ast_nodes import *
+from ast_nodes import (
+    BlockquoteNode, BoldItalicNode, BoldNode, CodeBlockNode, CodeInlineNode,
+    CriticAdditionNode, CriticCommentNode, CriticDeletionNode,
+    CriticHighlightNode, CriticSubstitutionNode, DefinitionItemNode,
+    DefinitionListNode, DocumentNode, FootnoteDefNode, FootnoteRefNode,
+    HTMLBlockNode, HTMLInlineNode, HeadingNode, HorizontalRuleNode, ImageNode,
+    ItalicNode, LineBreakNode, LinkNode, ListItemNode, MathBlockNode,
+    MathInlineNode, MermaidDiagramNode, OrderedListNode, ParagraphNode,
+    PlantUMLDiagramNode, StrikethroughNode, SubscriptNode, SuperscriptNode,
+    TableCellNode, TableNode, TableRowNode, TaskItemNode, TaskListNode,
+    TextNode, UnorderedListNode,
+)
 
 
 class MDParseError(Exception):
@@ -329,7 +340,6 @@ class MarkdownParser:
             row_cells = [TableCellNode(content=c.strip()) for c in cells_raw]
             rows.append(TableRowNode(cells=row_cells))
             self.pos += 1
-        header_row = TableRowNode(cells=headers, is_header=True)
         return TableNode(headers=headers, rows=rows, alignments=alignments, line=self.pos - len(rows) - 2)
 
     def _split_table_row(self, line: str) -> list[str]:

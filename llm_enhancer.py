@@ -3,7 +3,7 @@
 import os
 import re
 import json
-from typing import Optional, Dict, List, Any, Callable
+from typing import Optional, Dict, List, Any
 from dataclasses import dataclass, field
 
 
@@ -49,7 +49,7 @@ class OpenAIProvider(LLMProvider):
     def is_available(self) -> bool:
         """检查是否可用"""
         try:
-            import openai
+            import openai  # noqa: F401
             return True
         except ImportError:
             return False
@@ -82,7 +82,7 @@ class AnthropicProvider(LLMProvider):
     def is_available(self) -> bool:
         """检查是否可用"""
         try:
-            import anthropic
+            import anthropic  # noqa: F401
             return True
         except ImportError:
             return False

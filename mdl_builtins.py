@@ -1,9 +1,13 @@
 """MDL 内置函数库 - 提供所有 Markdown 操作的内置函数"""
 
-from ast_nodes import *
+from ast_nodes import (
+    BlockquoteNode, CodeBlockNode, DocumentNode, HeadingNode, HorizontalRuleNode,
+    ListItemNode, OrderedListNode, ParagraphNode, TableNode, TaskItemNode,
+    UnorderedListNode,
+)
 from md_parser import parse_markdown
-from md_generator import generate_markdown, generate_inline, generate_node
-from storage import StorageEngine, storage as _storage
+from md_generator import generate_markdown, generate_node
+from storage import StorageEngine
 from analyzer import DocumentAnalyzer
 from converter import HTMLConverter, TextConverter
 
@@ -149,7 +153,7 @@ class BuiltinFunctions:
     def load_url(env: Environment, url: str, alias: str = "url_doc") -> DocumentNode:
         """从网页加载并转换为 Markdown 文档"""
         try:
-            from formats import URLHandler, convert_to_markdown
+            from formats import convert_to_markdown
             
             # 从 URL 获取内容并转换为 Markdown
             markdown_content = convert_to_markdown(url)
@@ -405,6 +409,96 @@ class BuiltinFunctions:
         """获取字典值"""
         return list(d.values())
 
+    # ── 向量操作 ──
+
+    @staticmethod
+    def vector_index(env: Environment, path: str, collection: str = "default",
+                     chunk_size: int = 1000, chunk_overlap: int = 200,
+                     embedding_provider: str = "openai", embedding_model: str = "") -> dict:
+        """索引文档到向量库"""
+        from vector_chunker import MarkdownChunker, ChunkerConfig
+        from vector_embeddings import create_embedding_provider
+        from vector_store import VectorStore
+
+        # 读取文件
+        with open(path, "r", encoding="utf-8", errors="replace") as f:
+            md_text = f.read()
+
+        # 分块
+        config = ChunkerConfig(chunk_size=chunk_size, chunk_overlap=chunk_overlap)
+        chunker = MarkdownChunker(config)
+        chunks = chunker.chunk_text(md_text, source_path=path)
+
+        if not chunks:
+            return {"chunks": 0, "collection": collection, "path": path}
+
+        # 嵌入
+        embedder = create_embedding_provider(embedding_provider, embedding_model)
+        if not embedder.is_available():
+            embedder = create_embedding_provider("fallback")
+
+        texts = [c.text for c in chunks]
+        embeddings = embedder.get_embeddings(texts)
+
+        # 存储
+        store = VectorStore()
+        added = store.add_chunks(collection, chunks, embeddings)
+        return {"chunks": added, "collection": collection, "path": path}
+
+    @staticmethod
+    def vector_search(env: Environment, query: str, collection: str = "default",
+                      top_k: int = 5, embedding_provider: str = "openai") -> list:
+        """搜索向量库"""
+        from vector_embeddings import create_embedding_provider
+        from vector_store import VectorStore
+
+        embedder = create_embedding_provider(embedding_provider)
+        if not embedder.is_available():
+            embedder = create_embedding_provider("fallback")
+
+        store = VectorStore()
+        query_vector = embedder.get_embedding(query)
+        if not query_vector:
+            return []
+
+        results = store.search(collection, query_vector, top_k=top_k)
+        return [
+            {
+                "text": r.text,
+                "markdown": r.markdown,
+                "score": round(r.score, 4),
+                "heading_path": r.metadata.get("heading_path", ""),
+                "source_path": r.metadata.get("source_path", ""),
+            }
+            for r in results
+        ]
+
+    @staticmethod
+    def vector_query(env: Environment, question: str, collection: str = "default",
+                     top_k: int = 5, llm_provider: str = "openai",
+                     llm_model: str = "") -> dict:
+        """RAG 查询"""
+        from vector_embeddings import create_embedding_provider
+        from vector_store import VectorStore
+        from vector_rag import RAGPipeline
+        from llm_enhancer import LLMConfig
+
+        embedder = create_embedding_provider("openai")
+        if not embedder.is_available():
+            embedder = create_embedding_provider("fallback")
+
+        llm_config = LLMConfig(provider=llm_provider, model=llm_model)
+
+        store = VectorStore()
+        pipeline = RAGPipeline(
+            vector_store=store,
+            embedding_provider=embedder,
+            llm_config=llm_config,
+        )
+
+        result = pipeline.query(question, collection_name=collection, top_k=top_k)
+        return result
+
 
 BUILTINS = {
     "load": BuiltinFunctions.load,
@@ -446,4 +540,7 @@ BUILTINS = {
     "extract_links": BuiltinFunctions.extract_links,
     "analyze": BuiltinFunctions.analyze_document,
     "select": BuiltinFunctions.select_elements,
+    "vector_index": BuiltinFunctions.vector_index,
+    "vector_search": BuiltinFunctions.vector_search,
+    "vector_query": BuiltinFunctions.vector_query,
 }

@@ -238,7 +238,7 @@ class PDFConverter:
     def is_available() -> bool:
         """检查是否可用"""
         try:
-            import pypdf
+            import pypdf  # noqa: F401
             return True
         except ImportError:
             return False
@@ -247,7 +247,7 @@ class PDFConverter:
     def is_pdfplumber_available() -> bool:
         """检查是否有 pdfplumber (优先选项)"""
         try:
-            import pdfplumber
+            import pdfplumber  # noqa: F401
             return True
         except ImportError:
             return False
@@ -351,7 +351,7 @@ class DOCXConverter:
     def is_available() -> bool:
         """检查是否可用"""
         try:
-            import docx
+            import docx  # noqa: F401
             return True
         except ImportError:
             return False
@@ -401,7 +401,7 @@ class PPTXConverter:
     def is_available() -> bool:
         """检查是否可用"""
         try:
-            import pptx
+            import pptx  # noqa: F401
             return True
         except ImportError:
             return False
@@ -431,7 +431,7 @@ class XLSXConverter:
     def is_available() -> bool:
         """检查是否可用"""
         try:
-            import openpyxl
+            import openpyxl  # noqa: F401
             return True
         except ImportError:
             return False
@@ -514,14 +514,13 @@ class EPUBConverter:
     def is_available() -> bool:
         """检查是否可用"""
         try:
-            import ebooklib
+            import ebooklib  # noqa: F401
             return True
         except ImportError:
             return False
 
     @staticmethod
     def to_markdown(epub_path: str) -> str:
-        """EPUB 转 Markdown"""
         if not EPUBConverter.is_available():
             raise ImportError("EPUB 支持需要安装 ebooklib: pip install ebooklib")
         from ebooklib import epub
@@ -550,7 +549,7 @@ class MOBIConverter:
     def is_available() -> bool:
         """检查是否可用"""
         try:
-            import ebooklib
+            import ebooklib  # noqa: F401
             return True
         except ImportError:
             return False
@@ -591,7 +590,7 @@ class ImageConverter:
     def is_available() -> bool:
         """检查是否可用"""
         try:
-            from PIL import Image
+            from PIL import Image  # noqa: F401
             return True
         except ImportError:
             return False
@@ -600,7 +599,7 @@ class ImageConverter:
     def is_ocr_available() -> bool:
         """检查 OCR 是否可用"""
         try:
-            import pytesseract
+            import pytesseract  # noqa: F401
             return True
         except ImportError:
             return False
@@ -801,7 +800,7 @@ class YAMLConverter:
     def is_available() -> bool:
         """检查是否可用"""
         try:
-            import yaml
+            import yaml  # noqa: F401
             return True
         except ImportError:
             return False
@@ -826,11 +825,11 @@ class TOMLConverter:
     def is_available() -> bool:
         """检查是否可用"""
         try:
-            import tomllib
+            import tomllib  # noqa: F401
             return True
         except ImportError:
             try:
-                import toml
+                import toml  # noqa: F401
                 return True
             except ImportError:
                 return False
@@ -866,7 +865,7 @@ class PDFConverterEnhanced:
     def is_available() -> bool:
         """检查是否可用"""
         try:
-            import pypdf
+            import pypdf  # noqa: F401
             return True
         except ImportError:
             return False
@@ -875,8 +874,8 @@ class PDFConverterEnhanced:
     def is_ocr_available() -> bool:
         """检查 OCR 是否可用"""
         try:
-            import pytesseract
-            from PIL import Image
+            import pytesseract  # noqa: F401
+            from PIL import Image  # noqa: F401
             return True
         except ImportError:
             return False
@@ -976,8 +975,8 @@ class URLHandler:
     def is_available() -> bool:
         """检查是否可用"""
         try:
-            import requests
-            from bs4 import BeautifulSoup
+            import requests  # noqa: F401
+            from bs4 import BeautifulSoup  # noqa: F401
             return True
         except ImportError:
             return False

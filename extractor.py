@@ -110,7 +110,7 @@ class StructuredExtractor:
         table_pattern = r"(\|[^\n]+\|\n)+(\|[-:| ]+\|\n)?(\|[^\n]+\|\n?)*"
         for match in re.finditer(table_pattern, markdown):
             table_text = match.group(0)
-            lines = [l for l in table_text.strip().split("\n") if l.strip()]
+            lines = [line for line in table_text.strip().split("\n") if line.strip()]
             if len(lines) < 2:
                 continue
             headers = [c.strip() for c in lines[0].split("|") if c.strip()]

@@ -1,9 +1,11 @@
 """MDL REPL - 交互式命令行环境"""
 
-import sys
 from interpreter import Interpreter, MDLRuntimeError
 from parser import parse
-from mdl_builtins import BuiltinFunctions
+from ast_nodes import (
+    CodeBlockNode, HeadingNode, OrderedListNode, ParagraphNode,
+    TableNode, UnorderedListNode,
+)
 
 
 class REPL:

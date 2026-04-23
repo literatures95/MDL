@@ -1,7 +1,7 @@
 """MDL 文档清理模块 - 移除页眉、页脚、伪影等"""
 
 import re
-from typing import List, Optional, Set, Tuple
+from typing import List, Set
 from dataclasses import dataclass
 
 
@@ -188,7 +188,6 @@ class TableCleaner:
             if len(lines) < 2:
                 return table
             header = lines[0]
-            separator = lines[1]
             body = lines[2:] if len(lines) > 2 else []
             cols = len([c for c in header.split("|") if c.strip()])
             fixed_separator = "|" + "|".join(["---"] * cols) + "|"

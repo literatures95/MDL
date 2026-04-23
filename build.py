@@ -101,7 +101,7 @@ class PDFBuilder:
         result = subprocess.run(cmd, capture_output=True, text=True, encoding='utf-8')
 
         if result.returncode != 0:
-            print(f"构建失败:")
+            print("构建失败:")
             print(f"错误输出: {result.stderr}")
             raise RuntimeError(f"Pandoc 错误: {result.stderr}")
 
@@ -120,7 +120,7 @@ class PDFBuilder:
                 time.sleep(1)
                 current_mtime = os.path.getmtime(input_file)
                 if current_mtime > last_mtime:
-                    print(f"\n文件已修改，重新构建...")
+                    print("\n文件已修改，重新构建...")
                     try:
                         self.build_pdf(input_file, template=template, **kwargs)
                         print("构建完成")

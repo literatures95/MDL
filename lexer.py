@@ -121,7 +121,6 @@ KEYWORDS = {
     "import": TokenType.IMPORT,
     "from": TokenType.FROM,
     "with": TokenType.WITH,
-    "as": TokenType.AS,
     "codeblock": TokenType.CODEBLOCK,
     "batch": TokenType.BATCH,
     "clean": TokenType.CLEAN,
@@ -335,7 +334,6 @@ class Lexer:
 
     def _read_operator_or_punctuation(self) -> Optional[Token]:
         ch = self._peek()
-        start_line, start_col = self.line, self.column
         simple_tokens = {
             "(": TokenType.LPAREN, ")": TokenType.RPAREN,
             "[": TokenType.LBRACKET, "]": TokenType.RBRACKET,

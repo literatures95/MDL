@@ -4,7 +4,6 @@ import sys
 import os
 import argparse
 import json
-from typing import Optional
 
 
 def create_parser() -> argparse.ArgumentParser:
@@ -81,6 +80,53 @@ def create_parser() -> argparse.ArgumentParser:
     info_parser = subparsers.add_parser("info", help="显示系统信息")
     info_parser.add_argument("--formats", action="store_true", help="显示支持的格式")
 
+    # ── 向量存储子命令 ──
+    vector_parser = subparsers.add_parser("vector", help="向量存储与检索")
+    vector_subparsers = vector_parser.add_subparsers(dest="vector_command", help="向量操作")
+
+    vi_parser = vector_subparsers.add_parser("index", help="索引文档到向量库")
+    vi_parser.add_argument("path", help="输入文件或目录路径")
+    vi_parser.add_argument("--collection", "-c", default="default", help="集合名称")
+    vi_parser.add_argument("--chunk-size", type=int, default=1000, help="分块大小（字符数）")
+    vi_parser.add_argument("--chunk-overlap", type=int, default=200, help="分块重叠（字符数）")
+    vi_parser.add_argument("--embedding", "-e", default="openai",
+                          choices=["openai", "ollama", "sentence-transformers", "fallback"],
+                          help="嵌入模型提供者")
+    vi_parser.add_argument("--model", "-m", help="嵌入模型名称（覆盖默认）")
+    vi_parser.add_argument("--api-key", help="API 密钥")
+    vi_parser.add_argument("--api-base", help="API 基础 URL")
+
+    vector_subparsers.add_parser("list", help="列出所有向量集合")
+
+    vs_parser = vector_subparsers.add_parser("search", help="语义搜索")
+    vs_parser.add_argument("query", help="搜索查询")
+    vs_parser.add_argument("--collection", "-c", default="default", help="集合名称")
+    vs_parser.add_argument("--top-k", "-k", type=int, default=5, help="返回结果数")
+    vs_parser.add_argument("--embedding", "-e", default="openai",
+                          choices=["openai", "ollama", "sentence-transformers", "fallback"],
+                          help="嵌入模型提供者")
+    vs_parser.add_argument("--detail", "-d", action="store_true", help="显示完整内容")
+
+    vd_parser = vector_subparsers.add_parser("delete", help="删除集合")
+    vd_parser.add_argument("collection", help="要删除的集合名称")
+
+    vinfo_parser = vector_subparsers.add_parser("info", help="查看集合信息")
+    vinfo_parser.add_argument("collection", nargs="?", default=None, help="集合名称（省略则显示所有）")
+
+    # ── RAG 查询子命令 ──
+    query_parser = subparsers.add_parser("query", help="RAG 问答（检索 + LLM 生成）")
+    query_parser.add_argument("question", help="问题")
+    query_parser.add_argument("--collection", "-c", default="default", help="集合名称")
+    query_parser.add_argument("--top-k", "-k", type=int, default=5, help="检索结果数")
+    query_parser.add_argument("--provider", "-p", default="openai",
+                            choices=["openai", "anthropic", "ollama"], help="LLM 提供者")
+    query_parser.add_argument("--model", "-m", help="LLM 模型名称")
+    query_parser.add_argument("--embedding", "-e", default="openai",
+                            choices=["openai", "ollama", "sentence-transformers", "fallback"],
+                            help="嵌入模型提供者")
+    query_parser.add_argument("--api-key", help="API 密钥")
+    query_parser.add_argument("--api-base", help="API 基础 URL")
+
     return parser
 
 
@@ -90,7 +136,6 @@ def cmd_convert(args):
     from converter import md_to_html, md_to_text
     from cleaner import clean_document
     from md_parser import parse_markdown
-    from md_generator import generate_markdown
 
     print(f"[MDL] 转换文件: {args.input}")
 
@@ -181,11 +226,11 @@ def cmd_analyze(args):
             print(f"\n总元素数: {stats.total_elements}")
             print(f"总字数: {stats.word_count}")
             print(f"总行数: {stats.line_count}")
-            print(f"\n元素统计:")
+            print("\n元素统计:")
             for elem, count in stats.element_counts.items():
                 print(f"  {elem}: {count}")
             if stats.heading_structure:
-                print(f"\n标题结构:")
+                print("\n标题结构:")
                 for h in stats.heading_structure:
                     indent = "  " * (h["level"] - 1)
                     print(f"{indent}- {h['text']}")
@@ -335,7 +380,7 @@ def cmd_info(args):
     print("=" * 50)
     print("MDL - Markdown 操作语言")
     print("=" * 50)
-    print(f"版本: 1.1.0")
+    print("版本: 1.1.0")
     print(f"Python: {sys.version}")
     print(f"工作目录: {os.getcwd()}")
 
@@ -413,11 +458,319 @@ def cmd_pdf_convert(md_content: str, output_path: str, template: str = None,
             # 清理临时文件
             try:
                 os.unlink(temp_md)
-            except:
+            except Exception:
                 pass
 
     except Exception as e:
         print(f"[MDL] PDF 生成失败: {e}")
+        sys.exit(1)
+
+
+# ═══════════════════════════════════════════════════
+# 向量存储与检索命令
+# ═══════════════════════════════════════════════════
+
+def cmd_vector(args):
+    """处理向量子命令"""
+    if not hasattr(args, "vector_command") or not args.vector_command:
+        print("用法: mdl vector {index|list|search|delete|info}")
+        return
+    handlers = {
+        "index": _cmd_vector_index,
+        "list": _cmd_vector_list,
+        "search": _cmd_vector_search,
+        "delete": _cmd_vector_delete,
+        "info": _cmd_vector_info,
+    }
+    handler = handlers.get(args.vector_command)
+    if handler:
+        handler(args)
+    else:
+        print(f"未知向量操作: {args.vector_command}")
+
+
+def _cmd_vector_index(args):
+    """索引文档到向量库"""
+    from vector_chunker import MarkdownChunker, ChunkerConfig
+    from vector_embeddings import create_embedding_provider
+    from vector_store import VectorStore
+
+    path = args.path
+    if not os.path.exists(path):
+        print(f"[MDL] 错误: 路径不存在: {path}")
+        sys.exit(1)
+
+    print(f"[MDL] 索引: {path}")
+    print(f"[MDL] 集合: {args.collection}")
+
+    # 构建分块器
+    chunker_config = ChunkerConfig(
+        chunk_size=args.chunk_size,
+        chunk_overlap=args.chunk_overlap,
+    )
+    chunker = MarkdownChunker(chunker_config)
+
+    # 获取所有文件
+    files = []
+    if os.path.isfile(path):
+        files.append(path)
+    else:
+        for root, _, filenames in os.walk(path):
+            for f in filenames:
+                ext = os.path.splitext(f)[1].lower()
+                if ext in (".md", ".markdown", ".txt", ".html", ".pdf",
+                           ".docx", ".pptx", ".xlsx", ".csv", ".json",
+                           ".yaml", ".yml", ".toml", ".xml", ".rst", ".tex",
+                           ".org", ".wiki"):
+                    files.append(os.path.join(root, f))
+
+    if not files:
+        print("[MDL] 未找到可索引的文件")
+        return
+
+    print(f"[MDL] 发现 {len(files)} 个文件")
+
+    # 初始化 embedding 和 store
+    embedder = create_embedding_provider(
+        args.embedding, args.model, args.api_key, args.api_base,
+    )
+    if not embedder.is_available():
+        print(f"[MDL] 警告: embedding 提供者 '{args.embedding}' 不可用，使用 fallback")
+        embedder = create_embedding_provider("fallback")
+
+    store = VectorStore()
+    total_chunks = 0
+
+    for file_path in files:
+        try:
+            # 非 Markdown 文件先转换为 Markdown
+            ext = os.path.splitext(file_path)[1].lower()
+            if ext not in (".md", ".markdown", ".txt"):
+                try:
+                    from formats import convert_to_markdown
+                    md_text = convert_to_markdown(file_path)
+                except Exception as e:
+                    print(f"[MDL]  跳过 {os.path.basename(file_path)}: 转换失败 - {e}")
+                    continue
+            else:
+                with open(file_path, "r", encoding="utf-8", errors="replace") as f:
+                    md_text = f.read()
+
+            # 分块
+            chunks = chunker.chunk_text(md_text, source_path=file_path)
+            if not chunks:
+                continue
+
+            # 嵌入
+            texts = [c.text for c in chunks]
+            embeddings = embedder.get_embeddings(texts)
+            if not embeddings or len(embeddings) != len(chunks):
+                print(f"[MDL]  嵌入失败: {os.path.basename(file_path)}")
+                continue
+
+            # 存储
+            added = store.add_chunks(args.collection, chunks, embeddings)
+            total_chunks += added
+            print(f"[MDL]  已索引 {os.path.basename(file_path)}: {added} 个分块")
+        except Exception as e:
+            print(f"[MDL]  处理失败 {os.path.basename(file_path)}: {e}")
+
+    if total_chunks > 0:
+        print(f"\n[MDL] 索引完成: 共 {total_chunks} 个分块存入集合 '{args.collection}'")
+    else:
+        print("\n[MDL] 未索引任何分块")
+
+
+def _cmd_vector_list(args):
+    """列出所有向量集合"""
+    from vector_store import VectorStore
+    store = VectorStore()
+    collections = store.list_collections()
+    if not collections:
+        print("没有向量集合")
+        return
+    print(f"\n{'集合名称':<20} {'分块数':<10} {'维度':<8} {'更新时间':<20}")
+    print("-" * 60)
+    for c in collections:
+        name = c["name"]
+        count = str(c["chunk_count"])
+        dim = str(c["dimension"]) if c["dimension"] else "-"
+        updated = c.get("updated_at", "-")[:16]
+        print(f"{name:<20} {count:<10} {dim:<8} {updated:<20}")
+
+
+def _cmd_vector_search(args):
+    """语义搜索"""
+    from vector_embeddings import create_embedding_provider
+    from vector_store import VectorStore
+
+    embedder = create_embedding_provider(args.embedding)
+    if not embedder.is_available():
+        print(f"[MDL] embedding 提供者 '{args.embedding}' 不可用，使用 fallback")
+        embedder = create_embedding_provider("fallback")
+
+    store = VectorStore()
+
+    try:
+        query_vector = embedder.get_embedding(args.query)
+        if not query_vector:
+            print("[MDL] 嵌入查询失败")
+            return
+
+        results = store.search(args.collection, query_vector, top_k=args.top_k)
+
+        if not results:
+            print(f"集合 '{args.collection}' 中未找到相关结果")
+            return
+
+        print(f"\n找到 {len(results)} 个结果（集合: {args.collection}）:\n")
+        for i, r in enumerate(results, 1):
+            heading = r.metadata.get("heading_path", "")
+            source = r.metadata.get("source_path", "")
+            preview = r.markdown[:300] if args.detail else r.text[:150]
+            print(f"[{i}] 相关度: {r.score:.4f}")
+            if heading:
+                print(f"    路径: {heading}")
+            if source:
+                print(f"    来源: {os.path.basename(source)}")
+            print(f"    内容: {preview}")
+            if len(r.text) > 150 and not args.detail:
+                print(f"    ... (共 {len(r.text)} 字符)")
+            print()
+    except Exception as e:
+        print(f"[MDL] 搜索失败: {e}")
+
+
+def _cmd_vector_delete(args):
+    """删除集合"""
+    from vector_store import VectorStore
+    store = VectorStore()
+    if store.delete_collection(args.collection):
+        print(f"集合 '{args.collection}' 已删除")
+    else:
+        print(f"集合 '{args.collection}' 不存在")
+
+
+def _cmd_vector_info(args):
+    """查看集合信息"""
+    from vector_store import VectorStore, VectorStoreError
+    store = VectorStore()
+    if args.collection:
+        try:
+            info = store.collection_info(args.collection)
+            print(f"\n集合: {info['name']}")
+            print(f"  分块数: {info['chunk_count']}")
+            print(f"  维度: {info['dimension']}")
+            print(f"  创建时间: {info['created_at']}")
+            print(f"  更新时间: {info['updated_at']}")
+        except VectorStoreError as e:
+            print(f"错误: {e}")
+    else:
+        collections = store.list_collections()
+        if not collections:
+            print("没有向量集合")
+            return
+        for c in collections:
+            print(f"\n{c['name']}:")
+            print(f"  分块数: {c['chunk_count']}")
+            print(f"  维度: {c['dimension']}")
+            print(f"  更新时间: {c.get('updated_at', '-')}")
+
+
+# ═══════════════════════════════════════════════════
+# RAG 查询命令
+# ═══════════════════════════════════════════════════
+
+def cmd_query(args):
+    """RAG 问答查询"""
+    from vector_embeddings import create_embedding_provider
+    from vector_store import VectorStore
+    from vector_rag import RAGPipeline
+    from llm_enhancer import LLMConfig
+
+    print(f"[MDL] 查询: {args.question}")
+    print(f"[MDL] 集合: {args.collection}")
+
+    # 初始化 embedding
+    embedder = create_embedding_provider(
+        args.embedding, "", args.api_key, args.api_base,
+    )
+    if not embedder.is_available():
+        print(f"[MDL] embedding 提供者 '{args.embedding}' 不可用，使用 fallback")
+        embedder = create_embedding_provider("fallback")
+
+    # 初始化 LLM
+    llm_config = LLMConfig(
+        provider=args.provider,
+        model=args.model or "",
+        api_key=args.api_key or "",
+        api_base=args.api_base or "",
+    )
+
+    store = VectorStore()
+    pipeline = RAGPipeline(
+        vector_store=store,
+        embedding_provider=embedder,
+        llm_config=llm_config,
+    )
+
+    try:
+        # 先搜索看看有没有内容
+        results = pipeline.search_only(args.question, args.collection, top_k=args.top_k)
+        if not results:
+            print(f"集合 '{args.collection}' 中未找到相关内容")
+            print("提示: 先用 'mdl vector index <文件>' 索引文档")
+            return
+
+        print(f"[MDL] 检索到 {len(results)} 个相关片段\n")
+
+        # 执行 RAG 查询
+        result = pipeline.query(
+            args.question,
+            collection_name=args.collection,
+            top_k=args.top_k,
+        )
+
+        if result.get("error"):
+            print(f"[MDL] 警告: {result['error']}")
+
+        if result.get("answer"):
+            print("=" * 50)
+            print("回答:")
+            print("=" * 50)
+            print(result["answer"])
+            print()
+
+        if result.get("sources"):
+            print("=" * 50)
+            print("参考来源:")
+            print("=" * 50)
+            for i, src in enumerate(result["sources"], 1):
+                heading = src.get("heading_path", "")
+                source = src.get("source_path", "")
+                score = src.get("score", 0)
+                preview = src.get("preview", "")[:100]
+                print(f"[{i}] 相关度: {score:.4f}")
+                if heading:
+                    print(f"    路径: {heading}")
+                if source:
+                    print(f"    来源: {os.path.basename(source)}")
+                print(f"    预览: {preview}")
+                print()
+
+        # 如果没有 LLM，显示纯检索结果
+        if not result.get("answer") and results:
+            print("=" * 50)
+            print("检索结果（未使用 LLM 生成回答）:")
+            print("=" * 50)
+            for i, r in enumerate(results, 1):
+                preview = r.markdown[:200]
+                print(f"[{i}] 相关度: {r.score:.4f}")
+                print(f"    内容: {preview}")
+                print()
+
+    except Exception as e:
+        print(f"[MDL] 查询失败: {e}")
         sys.exit(1)
 
 
@@ -441,6 +794,8 @@ def main():
         "run": cmd_run,
         "eval": cmd_eval,
         "info": cmd_info,
+        "vector": cmd_vector,
+        "query": cmd_query,
     }
 
     handler = commands.get(args.command)

@@ -87,7 +87,6 @@ def pdf_to_markdown_textin_api(pdf_path: str, app_id: str, secret_code: str) -> 
     成本: ~0.05 元/页
     """
     import requests
-    import os
     
     url = "https://api.textin.com/ai/service/v1/pdf_to_markdown"
     
@@ -423,7 +422,7 @@ def docx_to_markdown_with_images(docx_path: str, extract_images: bool = True) ->
                         f.write(image)
                     lines.append(f"![Image]({image_dir}/{image_filename})")
                     image_count += 1
-                except:
+                except Exception:
                     pass
     
     return "\n".join(lines)

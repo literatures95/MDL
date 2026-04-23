@@ -2,7 +2,12 @@
 
 import re
 from collections import Counter
-from ast_nodes import *
+from ast_nodes import (
+    BoldItalicNode, BoldNode, CodeBlockNode, CodeInlineNode, DocumentNode,
+    HeadingNode, ImageNode, ItalicNode, LinkNode, ListItemNode,
+    OrderedListNode, ParagraphNode, StrikethroughNode, TableNode,
+    TaskItemNode, TaskListNode, TextNode, UnorderedListNode,
+)
 from md_parser import parse_markdown
 
 
@@ -77,8 +82,8 @@ class DocumentAnalyzer:
             elif isinstance(child, (UnorderedListNode, OrderedListNode)):
                 info["item_count"] = len(child.items)
             elif isinstance(child, TableNode):
-                info["rows"] = len(node.rows) if hasattr(node, 'rows') else 0
-                info["cols"] = len(node.headers) if hasattr(node, 'headers') else 0
+                info["rows"] = len(child.rows) if hasattr(child, 'rows') else 0
+                info["cols"] = len(child.headers) if hasattr(child, 'headers') else 0
             structure.append(info)
         return structure
 
@@ -153,11 +158,11 @@ class DocumentAnalyzer:
                 pass
         return {
             "total_links": len(links),
-            "internal_links": [l for l in links if l.url.startswith("#")],
-            "external_links": [l for l in links if not l.url.startswith("#")],
+            "internal_links": [link for link in links if link.url.startswith("#")],
+            "external_links": [link for link in links if not link.url.startswith("#")],
             "domains": dict(url_domains.most_common(10)),
             "potentially_broken": broken_schemes,
-            "detail": [{"text": l.text, "url": l.url} for l in links[:20]],
+            "detail": [{"text": link.text, "url": link.url} for link in links[:20]],
         }
 
     def _collect_links(self, nodes, result: list):
@@ -173,7 +178,6 @@ class DocumentAnalyzer:
         images = []
         self._collect_images(self.doc.children, images)
         formats = Counter()
-        total_size_estimate = 0
         for img in images:
             src_lower = img.src.lower()
             if src_lower.endswith(".png"):
@@ -240,9 +244,9 @@ class DocumentAnalyzer:
         return {
             "list_count": len(lists),
             "total_items": total_items,
-            "unordered": sum(1 for l in lists if isinstance(l, UnorderedListNode)),
-            "ordered": sum(1 for l in lists if isinstance(l, OrderedListNode)),
-            "task_lists": sum(1 for l in lists if isinstance(l, TaskListNode)),
+            "unordered": sum(1 for lst in lists if isinstance(lst, UnorderedListNode)),
+            "ordered": sum(1 for lst in lists if isinstance(lst, OrderedListNode)),
+            "task_lists": sum(1 for lst in lists if isinstance(lst, TaskListNode)),
             "task_completion": round(task_completed / task_total * 100, 1) if task_total else 0,
             "task_done": task_completed,
             "task_total": task_total,
@@ -271,7 +275,6 @@ class DocumentAnalyzer:
         content_info = self.analyze_content()
         words = content_info.get("word_count", 0)
         sentences = content_info.get("sentence_count", 0)
-        chars = content_info.get("total_characters", 0)
         if words == 0 or sentences == 0:
             return {"score": 0, "level": "无法评估", "method": "无内容"}
         syllable_estimate = sum(self._estimate_syllables(w) for w in self._get_all_words())
@@ -340,7 +343,7 @@ class DocumentAnalyzer:
             warnings.append(f"{len(missing_alt)} 张图片缺少 alt 文本")
         links = []
         self._collect_links(self.doc.children, links)
-        empty_link_text = [l for l in links if not l.text.strip()]
+        empty_link_text = [link for link in links if not link.text.strip()]
         if empty_link_text:
             warnings.append(f"{len(empty_link_text)} 个链接缺少描述文本")
         long_paragraphs = [p for p in self.doc.children if isinstance(p, ParagraphNode) and len(p.raw_text) > 500]

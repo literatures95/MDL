@@ -2,12 +2,19 @@
 
 import os
 import re
-from ast_nodes import *
+from ast_nodes import (
+    CodeBlockNode, DocumentNode, HeadingNode, ImageNode, LinkNode, ListItemNode,
+    MDLAppendNode, MDLAssignNode, MDLBatchNode, MDLBinaryOpNode, MDLBooleanNode,
+    MDLCleanNode, MDLComparisonNode, MDLConvertNode, MDLExtractNode, MDLForNode,
+    MDLFuncCallNode, MDLFuncDefNode, MDLIdentifierNode, MDLIfNode, MDLIndexNode,
+    MDLInsertNode, MDLLoadNode, MDLNumberNode, MDLPrintNode, MDLProgramNode,
+    MDLPropertyNode, MDLRemoveNode, MDLSaveNode, MDLSelectorNode, MDLSetNode,
+    MDLStringNode, MDLTransformNode, MDLUnaryOpNode, OrderedListNode,
+    ParagraphNode, TableNode, TaskItemNode, TextNode, UnorderedListNode,
+)
 from mdl_builtins import Environment, BuiltinFunctions, BUILTINS
 from md_parser import parse_markdown
-from md_generator import generate_markdown, generate_node, MarkdownGenerator
-from storage import storage as _storage
-from analyzer import DocumentAnalyzer
+from md_generator import generate_markdown, MarkdownGenerator
 
 
 class MDLRuntimeError(Exception):
@@ -382,7 +389,8 @@ class Interpreter:
         builtin = BUILTINS.get(name.lower())
         if builtin:
             try:
-                if name.lower() in ("load", "save", "print", "analyze", "select"):
+                if name.lower() in ("load", "save", "print", "analyze", "select",
+                                    "vector_index", "vector_search", "vector_query"):
                     return builtin(self.env, *args)
                 return builtin(*args)
             except Exception as e:
@@ -449,7 +457,8 @@ class Interpreter:
                 elif prepared:
                     items.append(prepared)
             return items
-        if isinstance(content, (ParagraphNode, HeadingNode, CodeBlockNode, ListNode)):
+        if isinstance(content, (ParagraphNode, HeadingNode, CodeBlockNode,
+                            UnorderedListNode, OrderedListNode)):
             return content
         return ParagraphNode(content=[TextNode(value=str(content))], raw_text=str(content))
 
@@ -522,7 +531,7 @@ class Interpreter:
             new_doc = parse_markdown(cleaned)
             alias = self._get_doc_alias(target)
             self.env.set_doc(alias, new_doc)
-            print(f"[MDL] 文档已清理")
+            print("[MDL] 文档已清理")
             return new_doc
         elif isinstance(target, str):
             cleaned = clean_document(target)

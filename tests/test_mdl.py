@@ -2,18 +2,22 @@
 
 import sys
 import os
-import json
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from lexer import tokenize, Lexer
+from lexer import tokenize
 from parser import parse
 from md_parser import parse_markdown, split_document
-from md_generator import generate_markdown, DocumentNode
-from ast_nodes import *
-from storage import StorageEngine, to_json, from_json
+from md_generator import generate_markdown
+from ast_nodes import (
+    BlockquoteNode, CodeBlockNode, DocumentNode, FootnoteDefNode, FootnoteRefNode,
+    HeadingNode, HorizontalRuleNode, ImageNode, LinkNode, MathBlockNode,
+    MathInlineNode, OrderedListNode, ParagraphNode, TableNode, TaskListNode,
+    TextNode, UnorderedListNode,
+)
+from storage import to_json, from_json
 from analyzer import analyze, DocumentAnalyzer
-from converter import to_html, to_text, md_to_html, md_to_text
+from converter import md_to_html, md_to_text
 from interpreter import Interpreter
 from mdl_builtins import BuiltinFunctions
 
@@ -439,7 +443,7 @@ def test_batch_config():
 
 def test_epub_mobi_support():
     """测试 EPUB/MOBI 支持"""
-    from formats import EPUBConverter, MOBIConverter, FORMATS
+    from formats import FORMATS
     runner.assert_true("epub" in FORMATS, "EPUB 格式已注册")
     runner.assert_true("mobi" in FORMATS, "MOBI 格式已注册")
 
@@ -539,7 +543,7 @@ def test_format_categories():
 
 def test_convert_with_metadata():
     """测试带元数据的转换"""
-    from formats import convert_with_metadata, FORMATS
+    from formats import convert_with_metadata
     runner.assert_true(callable(convert_with_metadata), "带元数据转换函数存在")
 
 

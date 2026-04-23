@@ -2,7 +2,15 @@
 
 import json
 import html as html_module
-from ast_nodes import *
+from ast_nodes import (
+    BlockquoteNode, BoldItalicNode, BoldNode, CodeBlockNode, CodeInlineNode,
+    DefinitionItemNode, DefinitionListNode, DocumentNode, FootnoteDefNode,
+    FootnoteRefNode, HeadingNode, HorizontalRuleNode, ImageNode, ItalicNode,
+    LinkNode, ListItemNode, MathBlockNode, MathInlineNode, NodeType,
+    OrderedListNode, ParagraphNode, StrikethroughNode, SubscriptNode,
+    SuperscriptNode, TableNode, TaskItemNode, TaskListNode, TextNode,
+    UnorderedListNode,
+)
 
 
 class HTMLConverter:
@@ -302,7 +310,7 @@ class TextConverter:
             return self._inline_to_text(node.content)
         if isinstance(node, BlockquoteNode):
             lines = [self._to_text(c) for c in (node.content or [])]
-            return "\n".join(f"> {l}" for l in lines if l.strip())
+            return "\n".join(f"> {line}" for line in lines if line.strip())
         if isinstance(node, HorizontalRuleNode):
             return "---"
         if isinstance(node, LinkNode):
